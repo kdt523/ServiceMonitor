@@ -21,6 +21,8 @@ services:
         value: https://servicemonitor-backend.onrender.com   # update after first deploy
       - key: SITE_NAME
         value: ServiceMonitor
+      - key: PORT
+        value: "8000"
       - key: ALGORITHM
         value: HS256
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
