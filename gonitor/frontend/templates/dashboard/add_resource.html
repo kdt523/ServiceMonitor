@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Add Resource — Gonitor{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-8 col-lg-6">
+    <div class="mb-3">
+      <a href="/dashboard" style="color: var(--text-secondary); font-size:0.85rem;">
+        <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+      </a>
+    </div>
+    <div class="gonitor-card p-4">
+      <h1 class="h5 fw-bold mb-4" style="color: var(--text-primary);">Add New Resource</h1>
+      <form method="post" action="/resources">
+        <div class="mb-3">
+          <label class="form-label">Name</label>
+          <input type="text" class="form-control" name="name" placeholder="My Service" required />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Type</label>
+          <select class="form-select" name="resource_type">
+            <option value="http">HTTP / HTTPS</option>
+            <option value="tcp">TCP</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">URL</label>
+          <input type="text" class="form-control" name="url" placeholder="https://example.com" required />
+        </div>
+        <div class="mb-4">
+          <label class="form-label">Check Interval (minutes)</label>
+          <input type="number" class="form-control" name="interval_minutes" value="5" min="1" />
+        </div>
+        <button type="submit" class="btn btn-gonitor-primary w-100 py-2">
+          <i class="bi bi-plus-circle me-2"></i>Add Resource
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

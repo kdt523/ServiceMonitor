@@ -1,0 +1,73 @@
+services:
+  # ── Web Service (FastAPI) ─────────────────────────────────────────────────
+  - type: web
+    name: gonitor-backend
+    env: docker
+    # Build context = repo root; Dockerfile lives inside gonitor/backend/
+    dockerfilePath: gonitor/backend/Dockerfile
+    dockerContext: .
+    plan: free          # change to 'starter' or higher for production
+    region: oregon      # choose closest: oregon | frankfurt | singapore | ohio
+    healthCheckPath: /api/monitoring/status
+    envVars:
+      # Render injects DATABASE_URL automatically when linked to the database below
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gonitor-db
+          property: connectionString   # gives postgresql://... (auto-fixed by config.py)
+      - key: SECRET_KEY
+        generateValue: true            # Render generates a secure random value
+      - key: SITE_URL
+        value: https://gonitor-backend.onrender.com   # update after first deploy
+      - key: SITE_NAME
+        value: Gonitor
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "1440"
+      - key: REMEMBER_ME_EXPIRE_MINUTES
+        value: "43200"
+      - key: MONITORING_ENABLED
+        value: "true"
+      # ── Email (fill in or leave blank to disable) ─────────────────────────
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USE_TLS
+        value: "true"
+      - key: SMTP_USER
+        value: ""        # set in Render dashboard
+      - key: SMTP_PASSWORD
+        value: ""        # set in Render dashboard (use Gmail App Password)
+      - key: SMTP_FROM_EMAIL
+        value: ""
+      - key: SMTP_FROM_NAME
+        value: Gonitor
+      - key: NOTIFY_VIA_EMAIL
+        value: "false"
+      - key: NOTIFY_VIA_SMS
+        value: "false"
+      - key: RECIPIENT_EMAIL
+        value: ""
+      - key: RECIPIENT_NAME
+        value: Admin
+      - key: RECIPIENT_PHONE
+        value: ""
+      # ── Twilio (optional) ─────────────────────────────────────────────────
+      - key: TWILIO_SID
+        value: ""
+      - key: TWILIO_AUTH_TOKEN
+        value: ""
+      - key: TWILIO_FROM_PHONE
+        value: ""
+      # ── Gemini AI (optional) ─────────────────────────────────────────────
+      - key: GEMINI_API_KEY
+        value: ""        # set in Render dashboard
+
+# ── PostgreSQL Database ───────────────────────────────────────────────────────
+databases:
+  - name: gonitor-db
+    plan: free           # free Postgres (expires after 90 days on free tier)
+    databaseName: gonitor
+    user: gonitor

@@ -1,0 +1,511 @@
+{% extends "base.html" %}
+{% block title %}{{ host.name }} — Gonitor{% endblock %}
+{% block page_title %}{{ host.name }}{% endblock %}
+
+{% block head_extra %}
+<style>
+.svc-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; }
+.svc-card.active-svc { border-color: rgba(56,139,253,.3); }
+.info-row { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.info-item label { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); display: block; margin-bottom: 2px; }
+.info-item span { font-size: .875rem; color: var(--text-1); }
+.uptime-badge { display: inline-block; font-size: .68rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; margin-right: 4px; }
+.uptime-green  { background: rgba(63,185,80,.15); color: #3fb950; }
+.uptime-blue   { background: rgba(56,139,253,.15); color: #388bfd; }
+.uptime-amber  { background: rgba(210,153,34,.15); color: #d29922; }
+.uptime-red    { background: rgba(248,81,73,.15); color: #f85149; }
+.chart-container { height: 60px; position: relative; margin-top: .5rem; }
+.incident-ongoing { color: #f85149; font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div class="d-flex align-items-center gap-2">
+    <a href="/hosts" class="text-muted"><i class="bi bi-arrow-left"></i></a>
+    <h1 class="page-title mb-0">{{ host.name }}</h1>
+    {% if host.is_active %}
+      <span class="status-badge badge-healthy">Active</span>
+    {% else %}
+      <span class="status-badge badge-pending">Inactive</span>
+    {% endif %}
+  </div>
+  <div class="d-flex gap-2">
+    <a href="/hosts/{{ host.id }}/edit" class="btn btn-sm btn-outline-primary">
+      <i class="bi bi-pencil me-1"></i>Edit
+    </a>
+    <form method="POST" action="/hosts/{{ host.id }}/toggle" class="d-inline">
+      <button class="btn btn-sm {% if host.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
+        {% if host.is_active %}<i class="bi bi-pause me-1"></i>Pause{% else %}<i class="bi bi-play me-1"></i>Resume{% endif %}
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-4" id="host-tabs">
+  <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-info">Host Info</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-services">Manage Services</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-healthy">Healthy</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-warning">Warning</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-problems">Problems</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-pending">Pending</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-incidents">Incidents</a></li>
+</ul>
+
+<div class="tab-content" id="host-tabs-content">
+
+  <!-- Host Info Tab -->
+  <div class="tab-pane fade show active" id="tab-info">
+    <div class="g-card p-4">
+      <div class="info-row">
+        <div class="info-item"><label>URL</label><span>{{ host.url }}</span></div>
+        {% if host.canonical_name %}<div class="info-item"><label>Canonical Name</label><span>{{ host.canonical_name }}</span></div>{% endif %}
+        {% if host.ipv4 %}<div class="info-item"><label>IPv4</label><span>{{ host.ipv4 }}</span></div>{% endif %}
+        {% if host.ipv6 %}<div class="info-item"><label>IPv6</label><span>{{ host.ipv6 }}</span></div>{% endif %}
+        {% if host.os %}<div class="info-item"><label>OS</label><span>{{ host.os }}</span></div>{% endif %}
+        {% if host.location %}<div class="info-item"><label>Location</label><span>{{ host.location }}</span></div>{% endif %}
+        <div class="info-item"><label>Added</label><span>{{ host.created_at.strftime('%Y-%m-%d') }}</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Manage Services Tab -->
+  <div class="tab-pane fade" id="tab-services">
+    <div class="row g-3">
+      {% set svc_map = {} %}
+      {% for svc in services %}{% set _ = svc_map.update({svc.service_type: svc}) %}{% endfor %}
+
+      {% for stype, icon, color, desc in [
+        ('http',  'bi-globe',       '#388bfd', 'HTTP status check (200–399)'),
+        ('https', 'bi-shield-lock', '#3fb950', 'HTTPS check + TLS verification'),
+        ('ssl',   'bi-patch-check', '#d29922', 'SSL certificate expiry tracking'),
+        ('tcp',   'bi-plug',        '#bc8cff', 'Raw TCP port connectivity'),
+        ('ping',  'bi-broadcast',   '#e3b341', 'ICMP ping (network reachability)'),
+        ('dns',   'bi-signpost-2',  '#79c0ff', 'DNS hostname resolution'),
+        ('ssh',   'bi-terminal',    '#f778ba', 'SSH daemon check (port 22)'),
+        ('ftp',   'bi-folder2',     '#d2a8ff', 'FTP server check (port 21)'),
+        ('smtp',  'bi-envelope',    '#7ee787', 'SMTP banner grab (mail server)'),
+      ] %}
+      {% set svc = svc_map.get(stype) %}
+      <div class="col-md-4">
+        <div class="svc-card {% if svc and svc.is_active %}active-svc{% endif %}">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <div class="d-flex align-items-center gap-2">
+              <i class="bi {{ icon }}" style="color:{{ color }};font-size:1.2rem"></i>
+              <strong>{{ stype.upper() }}</strong>
+            </div>
+            {% if svc %}
+            <form method="POST" action="/hosts/{{ host.id }}/services/{{ svc.id }}/toggle">
+              <button type="submit" class="btn btn-sm {% if svc.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}" style="font-size:.75rem;padding:2px 8px">
+                {% if svc.is_active %}Disable{% else %}Enable{% endif %}
+              </button>
+            </form>
+            {% endif %}
+          </div>
+
+          <div class="text-muted mb-3" style="font-size:.78rem">{{ desc }}</div>
+
+          {% if svc %}
+            <div class="mb-2">
+              <span class="status-badge badge-{{ svc.status }}">{{ svc.status }}</span>
+              {% if stype == 'ssl' and svc.ssl_days_remaining is not none %}
+                <span class="ms-1 text-muted" style="font-size:.78rem">{{ svc.ssl_days_remaining }} days remaining</span>
+              {% endif %}
+            </div>
+
+            {% if svc.last_checked_at %}
+            <div class="text-muted" style="font-size:.75rem">
+              Last checked: <local-time datetime="{{ svc.last_checked_at.isoformat() }}Z"></local-time>
+            </div>
+            {% endif %}
+
+            {% if svc.response_time_ms %}
+            <div class="text-muted" style="font-size:.75rem">Response: {{ svc.response_time_ms }}ms</div>
+            {% endif %}
+
+            <!-- Uptime badges -->
+            <div class="mt-2" id="uptime-{{ svc.id }}"></div>
+
+            <!-- Port config for tcp/ssh/ftp/smtp -->
+            {% if stype in ('tcp', 'ssh', 'ftp', 'smtp') %}
+            <div class="mt-2">
+              <label class="form-label" style="font-size:.72rem">Custom Port</label>
+              <div class="d-flex gap-1">
+                <input type="number" class="form-control form-control-sm" style="width:80px"
+                       id="port-{{ svc.id }}" value="{{ svc.port or '' }}"
+                       placeholder="{{ svc.effective_port or '' }}" min="1" max="65535" />
+                <button class="btn btn-sm btn-outline-secondary" style="font-size:.72rem"
+                        onclick="saveConfig({{ host.id }}, {{ svc.id }}, {port: document.getElementById('port-{{ svc.id }}').value})">Save</button>
+              </div>
+            </div>
+            {% endif %}
+
+            <!-- Keyword check for http/https -->
+            {% if stype in ('http', 'https') %}
+            <div class="mt-2">
+              <label class="form-label" style="font-size:.72rem">Keyword Check (optional)</label>
+              <div class="d-flex gap-1">
+                <input type="text" class="form-control form-control-sm" id="keyword-{{ svc.id }}"
+                       value="{{ svc.keyword_check or '' }}" placeholder="e.g. Welcome to GitHub" />
+                <button class="btn btn-sm btn-outline-secondary" style="font-size:.72rem"
+                        onclick="saveConfig({{ host.id }}, {{ svc.id }}, {keyword_check: document.getElementById('keyword-{{ svc.id }}').value})">Save</button>
+              </div>
+            </div>
+            {% endif %}
+
+            <!-- Interval form -->
+            <form method="POST" action="/hosts/{{ host.id }}/services/{{ svc.id }}/interval" class="d-flex gap-1 mt-3">
+              <input type="number" name="interval_minutes" value="{{ svc.interval_minutes }}" min="1" max="1440" class="form-control form-control-sm" style="width:70px" />
+              <span class="align-self-center text-muted" style="font-size:.75rem">min</span>
+              <button type="submit" class="btn btn-sm btn-outline-secondary" style="font-size:.72rem">Set</button>
+            </form>
+
+            <!-- Check Now button -->
+            {% if svc.is_active %}
+            <button class="btn btn-sm btn-primary-g mt-2 w-100" onclick="checkNow({{ host.id }}, {{ svc.id }}, '{{ stype }}')" style="font-size:.78rem" id="check-btn-{{ svc.id }}">
+              <i class="bi bi-lightning me-1"></i>Check Now
+            </button>
+            {% endif %}
+
+            <!-- Response time chart -->
+            {% if svc.is_active and svc.last_checked_at %}
+            <div class="chart-container">
+              <canvas id="chart-{{ host.id }}-{{ stype }}"></canvas>
+            </div>
+            {% endif %}
+          {% else %}
+            <span class="text-muted" style="font-size:.8rem">Not configured</span>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Status filter tabs -->
+  {% for tab_id, tab_status in [('healthy','healthy'), ('warning','warning'), ('problems','problem'), ('pending','pending')] %}
+  <div class="tab-pane fade" id="tab-{{ tab_id }}">
+    <div class="g-card">
+      <div class="table-responsive">
+        <table class="table g-table mb-0">
+          <thead><tr><th>Service</th><th>Status</th><th>Last Checked</th><th>Response Time</th><th>Uptime (24h)</th><th>Error</th></tr></thead>
+          <tbody>
+            {% set ns = namespace(found=false) %}
+            {% for svc in services %}
+            {% if svc.status == tab_status and svc.is_active %}
+            {% set ns.found = true %}
+            <tr>
+              <td><span class="fw-semibold">{{ svc.service_type.upper() }}</span></td>
+              <td><span class="status-badge badge-{{ svc.status }}">{{ svc.status }}</span></td>
+              <td class="text-muted" style="font-size:.8rem">
+                {% if svc.last_checked_at %}
+                  <local-time datetime="{{ svc.last_checked_at.isoformat() }}Z"></local-time>
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td class="text-muted" style="font-size:.8rem">{{ svc.response_time_ms ~ 'ms' if svc.response_time_ms else '—' }}</td>
+              <td><span class="uptime-badge uptime-blue" id="uptime-badge-{{ svc.id }}">—</span></td>
+              <td class="text-muted" style="font-size:.78rem">
+                {{ svc.last_error or '—' }}
+                {% if svc.last_error and svc.status == 'problem' %}
+                <button
+                  class="btn btn-sm ms-2"
+                  style="font-size:.68rem;padding:1px 7px;background:linear-gradient(135deg,rgba(56,139,253,.15),rgba(188,140,255,.15));border:1px solid rgba(56,139,253,.35);color:var(--text-1);border-radius:20px"
+                  onclick="openAIChat({
+                    host_id: {{ host.id }},
+                    host_name: '{{ host.name|e }}',
+                    url: '{{ host.url|e }}',
+                    service_type: '{{ svc.service_type }}',
+                    status: '{{ svc.status }}',
+                    error_message: '{{ svc.last_error|e }}',
+                    response_time_ms: {{ svc.response_time_ms or 'null' }}
+                  }, 'Explain this error: {{ svc.last_error|e }}')">
+                  ✦ Ask AI
+                </button>
+                {% endif %}
+              </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+            {% if not ns.found %}
+            <tr><td colspan="6" class="text-center py-4 text-muted">No {{ tab_status }} services.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  <!-- Incidents Tab -->
+  <div class="tab-pane fade" id="tab-incidents">
+    <div class="g-card">
+      <div class="g-card-header">
+        <span><i class="bi bi-exclamation-triangle me-2" style="color:var(--red)"></i>Incident History</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table g-table mb-0">
+          <thead><tr><th>Service</th><th>Started</th><th>Resolved</th><th>Duration</th><th>Error</th></tr></thead>
+          <tbody id="incidents-tbody">
+            <tr><td colspan="5" class="text-center py-4 text-muted">Loading incidents...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- tab-content -->
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Persist active tab in localStorage
+const hostTabs = document.querySelectorAll('#host-tabs .nav-link');
+const savedTab = localStorage.getItem('hostDetailTab_{{ host.id }}');
+if (savedTab) {
+  const t = document.querySelector(`#host-tabs a[href="${savedTab}"]`);
+  if (t) { bootstrap.Tab.getOrCreateInstance(t).show(); }
+}
+hostTabs.forEach(t => {
+  t.addEventListener('shown.bs.tab', e => {
+    localStorage.setItem('hostDetailTab_{{ host.id }}', e.target.getAttribute('href'));
+  });
+});
+
+// ── Save service config (port, keyword, headers) via AJAX ──────────────────
+async function saveConfig(hostId, serviceId, data) {
+  try {
+    const r = await fetch(`/hosts/${hostId}/services/${serviceId}/config`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      Swal.fire({title:'Saved!', icon:'success', timer:1200, showConfirmButton:false, background:'#1c2128', color:'#e6edf3'});
+    }
+  } catch(e) {
+    Swal.fire({title:'Error', text:e.message, icon:'error', background:'#1c2128', color:'#e6edf3'});
+  }
+}
+
+// ── Check Now ──────────────────────────────────────────────────────────────
+async function checkNow(hostId, serviceId, stype) {
+  const btn = document.getElementById(`check-btn-${serviceId}`);
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-arrow-repeat me-1 spin"></i>Checking...';
+
+  const hostContext = {
+    host_id:      hostId,
+    host_name:    '{{ host.name|e }}',
+    url:          '{{ host.url|e }}',
+    service_type: stype,
+  };
+
+  try {
+    const r = await fetch(`/hosts/${hostId}/services/${serviceId}/check-now`, { method: 'POST' });
+    const data = await r.json();
+
+    const fullContext = {
+      ...hostContext,
+      status:          data.status,
+      error_message:   data.error_message || null,
+      response_time_ms: data.response_time_ms || null,
+    };
+
+    let bodyHtml = '';
+
+    if (stype === 'ssl' && data.ssl_cert_details) {
+      const d = data.ssl_cert_details;
+      const statusColor = data.status === 'healthy' ? '#3fb950' : data.status === 'warning' ? '#d29922' : '#f85149';
+      const daysLeft = data.ssl_days_remaining ?? '—';
+      const sans = d.sans || [];
+      const shownSans = sans.slice(0, 6);
+      const extraSans = sans.length > 6 ? `<span style="color:#8b949e"> +${sans.length - 6} more</span>` : '';
+
+      bodyHtml = `
+        <div style="text-align:left;font-size:.82rem;color:#8b949e;line-height:1.9">
+          <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:.75rem 1rem;margin-bottom:.9rem;display:flex;align-items:center;gap:.6rem">
+            <i class="bi bi-shield-${data.status === 'healthy' ? 'check' : data.status === 'warning' ? 'exclamation' : 'x'}"
+               style="font-size:1.3rem;color:${statusColor}"></i>
+            <div>
+              <div style="font-weight:600;font-size:.9rem;color:${statusColor}">${data.status.toUpperCase()}</div>
+              <div style="color:#8b949e;font-size:.76rem">${daysLeft} days remaining · ${data.response_time_ms ?? '—'}ms</div>
+            </div>
+          </div>
+          <table style="width:100%;border-collapse:collapse"><tbody>
+            ${row('Common Name', `<code style="color:#79c0ff;font-size:.8rem">${d.common_name}</code>`)}
+            ${row('SANs', shownSans.map(s => `<code style="color:#79c0ff;font-size:.78rem">${s}</code>`).join(', ') + extraSans)}
+            ${row('Valid From', `<span style="color:#3fb950">${d.valid_from}</span>`)}
+            ${row('Valid To',   `<span style="color:${statusColor}">${d.valid_to}</span>`)}
+            ${row('Serial Number', `<code style="font-size:.76rem;word-break:break-all">${d.serial_number}</code>`)}
+            ${row('Issuer', escHtml(d.issuer_cn) + (d.issuer_org ? ` <span style="color:#6e7681">(${escHtml(d.issuer_org)})</span>` : ''))}
+            ${row('TLS Version', d.tls_version)}
+            ${row('Cipher Suite', `<code style="font-size:.76rem">${d.cipher}</code>`)}
+          </tbody></table>
+        </div>`;
+    } else {
+      bodyHtml = `<div style="color:#8b949e;font-size:.875rem">
+        <p>Response: <strong style="color:#e6edf3">${data.response_time_ms ?? '—'}ms</strong></p>
+        ${data.error_message ? `<p style="color:#f85149">Error: ${escHtml(data.error_message)}</p>` : ''}
+      </div>`;
+    }
+
+    const aiInitialMsg = data.error_message
+      ? `Explain this ${stype.toUpperCase()} check error on ${escHtml(fullContext.host_name)}: ${escHtml(data.error_message)}`
+      : `The ${stype.toUpperCase()} check on ${escHtml(fullContext.host_name)} returned ${data.status.toUpperCase()}. Explain what was validated.`;
+
+    const aiContextJson = JSON.stringify(fullContext).replace(/'/g, "\\'");
+    const askAiHtml = `
+      <div style="margin-top:1rem;padding-top:.75rem;border-top:1px solid #30363d;text-align:center">
+        <button
+          onclick="Swal.close(); setTimeout(() => openAIChat(${aiContextJson}, '${aiInitialMsg.replace(/'/g, "\\'").replace(/"/g, '&quot;')}'), 200)"
+          style="background:linear-gradient(135deg,rgba(56,139,253,.2),rgba(188,140,255,.2));border:1px solid rgba(56,139,253,.4);color:#e6edf3;border-radius:20px;padding:.35rem 1rem;font-size:.8rem;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:.4rem;transition:all .2s"
+          onmouseover="this.style.borderColor='#388bfd'" onmouseout="this.style.borderColor='rgba(56,139,253,.4)'">
+          <span style="background:linear-gradient(135deg,#388bfd,#bc8cff);-webkit-background-clip:text;-webkit-text-fill-color:transparent">✦</span>
+          Ask AI to explain this
+        </button>
+      </div>`;
+
+    Swal.fire({
+      title: `${stype.toUpperCase()} — ${data.status.toUpperCase()}`,
+      html: bodyHtml + askAiHtml,
+      icon: data.status === 'healthy' ? 'success' : data.status === 'warning' ? 'warning' : 'error',
+      background: '#1c2128', color: '#e6edf3',
+      width: stype === 'ssl' ? '520px' : undefined,
+    }).then(() => location.reload());
+  } catch(e) {
+    Swal.fire({ title: 'Check failed', text: e.message, icon: 'error', background: '#1c2128', color: '#e6edf3' });
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-lightning me-1"></i>Check Now';
+  }
+}
+
+function row(label, value) {
+  return `<tr>
+    <td style="padding:3px 0;color:#6e7681;white-space:nowrap;padding-right:1rem;vertical-align:top;font-size:.76rem;text-transform:uppercase;letter-spacing:.04em">${label}</td>
+    <td style="padding:3px 0;color:#e6edf3">${value}</td>
+  </tr>`;
+}
+
+function escHtml(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Response Time Charts (Chart.js sparklines) ─────────────────────────────
+async function renderResponseChart(hostId, serviceType, canvasId) {
+  try {
+    const res = await fetch(`/api/hosts/${hostId}/services/${serviceType}/history?limit=288`);
+    const data = await res.json();
+    if (!data.length) return;
+
+    const labels = data.map(d => new Date(d.checked_at).toLocaleTimeString());
+    const values = data.map(d => d.response_time_ms);
+    const colors = data.map(d =>
+      d.status === 'healthy' ? '#1D9E75' :
+      d.status === 'warning' ? '#EF9F27' : '#E24B4A'
+    );
+
+    new Chart(document.getElementById(canvasId), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          data: values,
+          borderColor: '#378ADD',
+          backgroundColor: 'rgba(55,138,221,0.08)',
+          borderWidth: 1.5,
+          pointRadius: 1.5,
+          pointBackgroundColor: colors,
+          tension: 0.3,
+          spanGaps: true,
+          fill: true,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: true, mode: 'index', intersect: false } },
+        scales: {
+          x: { display: false },
+          y: {
+            min: 0,
+            ticks: { callback: v => v + 'ms', font: { size: 10 }, color: '#6e7681' },
+            grid: { color: 'rgba(255,255,255,0.04)' },
+            border: { display: false },
+          }
+        },
+        interaction: { mode: 'nearest', axis: 'x', intersect: false },
+      }
+    });
+  } catch(e) {
+    console.warn('Chart render failed for', canvasId, e);
+  }
+}
+
+// ── Uptime badges ──────────────────────────────────────────────────────────
+async function loadUptime(hostId, serviceType, targetId) {
+  try {
+    const res = await fetch(`/api/hosts/${hostId}/services/${serviceType}/uptime`);
+    const data = await res.json();
+    const el = document.getElementById(targetId);
+    if (!el) return;
+
+    function badge(label, pct) {
+      if (pct === null || pct === undefined) return `<span class="uptime-badge uptime-blue">${label}: —</span>`;
+      let cls = 'uptime-green';
+      if (pct < 95) cls = 'uptime-red';
+      else if (pct < 99) cls = 'uptime-amber';
+      else if (pct < 99.9) cls = 'uptime-blue';
+      return `<span class="uptime-badge ${cls}">${label}: ${pct}%</span>`;
+    }
+
+    el.innerHTML = badge('24h', data.uptime_24h) + badge('7d', data.uptime_7d) + badge('30d', data.uptime_30d);
+  } catch(e) {
+    console.warn('Uptime load failed', e);
+  }
+}
+
+// ── Load incidents ─────────────────────────────────────────────────────────
+async function loadIncidents(hostId) {
+  try {
+    const res = await fetch(`/api/hosts/${hostId}/incidents?limit=50`);
+    const data = await res.json();
+    const tbody = document.getElementById('incidents-tbody');
+    if (!data.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">No incidents recorded.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(inc => `
+      <tr>
+        <td><span class="fw-semibold">${inc.service_type.toUpperCase()}</span></td>
+        <td class="text-muted" style="font-size:.8rem">${new Date(inc.started_at).toLocaleString()}</td>
+        <td class="text-muted" style="font-size:.8rem">${inc.is_ongoing ? '<span class="incident-ongoing">⬤ Ongoing</span>' : new Date(inc.resolved_at).toLocaleString()}</td>
+        <td class="text-muted" style="font-size:.8rem">${inc.duration_display}</td>
+        <td class="text-muted" style="font-size:.78rem">${escHtml(inc.error_message || '—')}</td>
+      </tr>
+    `).join('');
+  } catch(e) {
+    console.warn('Incidents load failed', e);
+  }
+}
+
+// ── Init on page load ──────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // Render charts + load uptime for active services
+  {% for svc in services %}
+  {% if svc.is_active and svc.last_checked_at %}
+  renderResponseChart({{ host.id }}, '{{ svc.service_type }}', 'chart-{{ host.id }}-{{ svc.service_type }}');
+  loadUptime({{ host.id }}, '{{ svc.service_type }}', 'uptime-{{ svc.id }}');
+  {% endif %}
+  {% endfor %}
+
+  // Load incidents
+  loadIncidents({{ host.id }});
+});
+</script>
+<style>.spin { animation: spin .8s linear infinite; display:inline-block; } @keyframes spin { to { transform:rotate(360deg); } }</style>
+{% endblock %}

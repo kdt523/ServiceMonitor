@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Events Log — Gonitor{% endblock %}
+{% block page_title %}Events Log{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h1 class="page-title mb-0">Events Log</h1>
+  <span class="text-muted" style="font-size:.85rem">Last {{ events|length }} events</span>
+</div>
+
+<div class="g-card">
+  <div class="table-responsive">
+    <table class="table g-table mb-0">
+      <thead>
+        <tr>
+          <th style="width:160px">Time</th>
+          <th style="width:140px">Type</th>
+          <th>Host</th>
+          <th>Service</th>
+          <th>Message</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ev in events %}
+        <tr>
+          <td class="text-muted" style="font-size:.8rem;white-space:nowrap">
+            <local-time datetime="{{ ev.created_at.isoformat() }}Z" seconds></local-time>
+          </td>
+          <td>
+            {% set et = ev.event_type %}
+            {% if 'problem' in et or 'error' in et %}
+              <span class="status-badge badge-problem">{{ et }}</span>
+            {% elif 'warning' in et %}
+              <span class="status-badge badge-warning">{{ et }}</span>
+            {% elif 'healthy' in et or 'enabled' in et or 'added' in et %}
+              <span class="status-badge badge-healthy">{{ et }}</span>
+            {% else %}
+              <span class="status-badge badge-pending">{{ et }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if ev.host %}
+              <a href="/hosts/{{ ev.host_id }}" style="color:var(--text-1);font-size:.875rem">{{ ev.host.name }}</a>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if ev.service_type %}
+              <span class="status-badge" style="background:rgba(56,139,253,.1);color:var(--blue);border:1px solid rgba(56,139,253,.3);font-size:.68rem">{{ ev.service_type.upper() }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td style="font-size:.875rem">{{ ev.message }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" class="text-center py-5 text-muted">
+            <i class="bi bi-journal-text" style="font-size:2rem;opacity:.3;display:block;margin-bottom:.5rem"></i>
+            No events logged yet.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

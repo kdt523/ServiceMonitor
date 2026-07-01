@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}{{ resource.name }} — Gonitor{% endblock %}
+
+{% block content %}
+<!-- Back link -->
+<div class="mb-3">
+  <a href="/dashboard" style="color: var(--text-secondary); font-size:0.85rem;">
+    <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+  </a>
+</div>
+
+<!-- Resource header -->
+<div class="gonitor-card p-4 mb-4">
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div>
+      <h1 class="h4 fw-bold mb-1" style="color: var(--text-primary);">{{ resource.name }}</h1>
+      <p class="mb-2" style="color: var(--text-muted); font-size:0.85rem;">{{ resource.url }}</p>
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span class="status-badge status-{{ resource.status }}" id="detail-badge">
+          {% if resource.status == 'up' %}<i class="bi bi-check-circle-fill"></i>
+          {% elif resource.status == 'down' %}<i class="bi bi-x-circle-fill"></i>
+          {% else %}<i class="bi bi-question-circle"></i>{% endif %}
+          {{ resource.status | upper }}
+        </span>
+        <span class="badge rounded-pill"
+              style="font-size:0.7rem; background:{% if resource.resource_type == 'http' %}rgba(56,139,253,0.15); color:#388bfd; border:1px solid rgba(56,139,253,0.3){% else %}rgba(188,140,255,0.15); color:#bc8cff; border:1px solid rgba(188,140,255,0.3){% endif %};">
+          {{ resource.resource_type | upper }}
+        </span>
+        <span style="font-size:0.78rem; color: var(--text-muted);">
+          <i class="bi bi-clock me-1"></i>Every {{ resource.interval_minutes }} min
+        </span>
+      </div>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-gonitor-primary btn-sm px-3" id="check-now-btn" data-resource-id="{{ resource.id }}">
+        <i class="bi bi-lightning-fill me-1"></i>Check Now
+      </button>
+    </div>
+  </div>
+
+  <!-- Quick stats -->
+  <div class="row g-3 mt-2">
+    <div class="col-6 col-md-3">
+      <div style="background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
+        <div style="font-size:1.3rem; font-weight:700; color:var(--text-primary);">
+          {{ resource.response_time_ms if resource.response_time_ms is not none else '—' }}
+          {% if resource.response_time_ms is not none %}<span style="font-size:0.7rem; color:var(--text-muted); font-weight:400;">ms</span>{% endif %}
+        </div>
+        <div style="font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em;">Last Response</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div style="background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
+        <div style="font-size:1.3rem; font-weight:700; color:var(--text-primary);">{{ logs | length }}</div>
+        <div style="font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em;">Checks (last 50)</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div style="background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
+        {% set up_logs = logs | selectattr('status', 'equalto', 'up') | list %}
+        <div style="font-size:1.3rem; font-weight:700; color: var(--accent-green);">
+          {% if logs | length > 0 %}{{ ((up_logs | length) / (logs | length) * 100) | round(1) }}%{% else %}—{% endif %}
+        </div>
+        <div style="font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em;">Uptime</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div style="background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
+        <div style="font-size:1.3rem; font-weight:700; color: var(--text-primary);">
+          {% if resource.last_checked_at %}{{ resource.last_checked_at.strftime('%H:%M') }}{% else %}—{% endif %}
+        </div>
+        <div style="font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em;">Last Checked</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Check history -->
+<div class="gonitor-card overflow-hidden">
+  <div class="px-3 py-3" style="border-bottom:1px solid var(--border-color);">
+    <h2 class="h6 fw-semibold mb-0" style="color: var(--text-secondary);">
+      <i class="bi bi-clock-history me-2"></i>Check History (last 50)
+    </h2>
+  </div>
+
+  {% if logs %}
+  <div class="table-responsive">
+    <table class="table gonitor-table mb-0">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Status</th>
+          <th>Response Time</th>
+          <th>Error</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td style="color: var(--text-muted); font-size:0.8rem;">
+            {{ log.checked_at.strftime('%Y-%m-%d %H:%M:%S') }}
+          </td>
+          <td>
+            <span class="status-badge status-{{ log.status }}">
+              {% if log.status == 'up' %}<i class="bi bi-check-circle-fill"></i>{% else %}<i class="bi bi-x-circle-fill"></i>{% endif %}
+              {{ log.status | upper }}
+            </span>
+          </td>
+          <td style="color: var(--text-secondary); font-size:0.82rem;">
+            {% if log.response_time_ms is not none %}{{ log.response_time_ms }} ms{% else %}—{% endif %}
+          </td>
+          <td style="color: var(--accent-red); font-size:0.8rem; max-width:300px; word-break:break-all;">
+            {{ log.error_message or '' }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="text-center py-5">
+    <div style="font-size:2.5rem; opacity:0.3;">📭</div>
+    <p class="mt-3" style="color: var(--text-muted); font-size:0.85rem;">No check logs yet. The first check will run shortly.</p>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('check-now-btn').addEventListener('click', async function() {
+  const btn = this;
+  const resourceId = btn.dataset.resourceId;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Checking…';
+
+  try {
+    const resp = await fetch(`/resources/${resourceId}/check-now`, { method: 'POST' });
+    if (resp.ok) {
+      setTimeout(() => location.reload(), 800);
+    }
+  } catch(e) {
+    console.error(e);
+  } finally {
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-lightning-fill me-1"></i>Check Now';
+    }, 1500);
+  }
+});
+</script>
+{% endblock %}

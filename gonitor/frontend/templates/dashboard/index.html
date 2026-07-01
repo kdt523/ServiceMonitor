@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Gonitor{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Stat cards row -->
+<div class="row g-3 mb-4">
+  {% set stats = [
+    ("healthy",  healthy_count,  "bi-check-circle-fill",  "#3fb950", "Healthy"),
+    ("warning",  warning_count,  "bi-exclamation-triangle-fill", "#d29922", "Warning"),
+    ("problem",  problem_count,  "bi-x-circle-fill",      "#f85149", "Problems"),
+    ("uptime",   "...",          "bi-activity",           "#388bfd", "Uptime (24h)"),
+  ] %}
+  {% for key, val, icon, color, label in stats %}
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card d-flex align-items-center gap-3">
+      <div style="width:44px;height:44px;border-radius:10px;background:{{ color }}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <i class="bi {{ icon }}" style="color:{{ color }};font-size:1.25rem"></i>
+      </div>
+      <div>
+        <div class="stat-value" id="stat-{{ key }}" style="color:{{ color }}">{{ val }}</div>
+        <div class="stat-label">{{ label }}</div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Hosts table -->
+<div class="g-card">
+  <div class="g-card-header">
+    <span><i class="bi bi-hdd-network me-2" style="color:var(--blue)"></i>Monitored Hosts</span>
+    <a href="/hosts/add" class="btn btn-sm btn-primary-g btn-sm-g">
+      <i class="bi bi-plus-lg me-1"></i>Add Host
+    </a>
+  </div>
+  <div class="table-responsive">
+    <table class="table g-table mb-0">
+      <thead>
+        <tr>
+          <th>Host</th>
+          <th>URL</th>
+          <th>Services</th>
+          <th>Location</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="hosts-table-body">
+        {% for host in hosts %}
+        {% set svc_map = host_service_map[host.id] %}
+        <tr id="host-row-{{ host.id }}">
+          <td>
+            <a href="/hosts/{{ host.id }}" class="fw-semibold" style="color:var(--text-1)">{{ host.name }}</a>
+            {% if not host.is_active %}
+            <span class="status-badge badge-pending ms-1">Inactive</span>
+            {% endif %}
+          </td>
+          <td><span class="text-muted" style="font-size:.8rem;max-width:200px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ host.url }}</span></td>
+          <td>
+            <div class="d-flex gap-1 flex-wrap">
+            {% for stype in ['http', 'https', 'ssl', 'tcp', 'ping', 'dns', 'ssh', 'ftp', 'smtp'] %}
+              {% if svc_map.get(stype) %}
+                {% set svc = svc_map[stype] %}
+                {% if svc.is_active %}
+                  <span class="status-badge badge-{{ svc.status }}" title="{{ stype | upper }} - {{ svc.status }}">
+                    <i class="bi bi-circle-fill" style="font-size:.45rem"></i>{{ stype | upper }}
+                  </span>
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% if not svc_map %}
+              <span class="text-muted" style="font-size:.78rem">—</span>
+            {% endif %}
+            </div>
+          </td>
+          <td><span class="text-muted" style="font-size:.8rem">{{ host.location or '—' }}</span></td>
+          <td>
+            <a href="/hosts/{{ host.id }}" class="btn btn-sm btn-outline-secondary btn-sm-g me-1" title="Detail">
+              <i class="bi bi-eye"></i>
+            </a>
+            <a href="/hosts/{{ host.id }}/edit" class="btn btn-sm btn-outline-primary btn-sm-g me-1" title="Edit">
+              <i class="bi bi-pencil"></i>
+            </a>
+            <button onclick="confirmDelete({{ host.id }}, '{{ host.name }}')" class="btn btn-sm btn-outline-danger btn-sm-g" title="Delete">
+              <i class="bi bi-trash"></i>
+            </button>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="text-center py-5 text-muted">
+            <i class="bi bi-hdd-network" style="font-size:2rem;opacity:.3;display:block;margin-bottom:.5rem"></i>
+            No hosts yet. <a href="/hosts/add">Add your first host →</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Recent Incidents -->
+<div class="g-card mt-4">
+  <div class="g-card-header">
+    <span><i class="bi bi-exclamation-triangle me-2" style="color:var(--red)"></i>Recent Incidents</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table g-table mb-0">
+      <thead>
+        <tr>
+          <th>Host</th>
+          <th>Service</th>
+          <th>Started</th>
+          <th>Resolved</th>
+          <th>Duration</th>
+        </tr>
+      </thead>
+      <tbody id="recent-incidents-body">
+        <tr><td colspan="5" class="text-center py-4 text-muted">Loading incidents...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function confirmDelete(hostId, hostName) {
+  Swal.fire({
+    title: `Delete "${hostName}"?`,
+    text: 'This will remove the host and all its monitoring services.',
+    icon: 'warning',
+    background: '#1c2128',
+    color: '#e6edf3',
+    showCancelButton: true,
+    confirmButtonColor: '#f85149',
+    cancelButtonColor: '#30363d',
+    confirmButtonText: 'Yes, delete',
+  }).then(result => {
+    if (result.isConfirmed) {
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = `/hosts/${hostId}/delete`;
+      document.body.appendChild(form);
+      form.submit();
+    }
+  });
+}
+
+window._gonitorReady = window._gonitorReady || [];
+window._gonitorReady.push(function(ws) {
+  ws.addEventListener('message', e => {
+    const msg = JSON.parse(e.data);
+    if (msg.event === 'host-service-count-changed') {
+      const d = msg.data;
+      ['healthy','warning','problem'].forEach(k => {
+        const el = document.getElementById(`stat-${k}`);
+        if (el && d[k] !== undefined) el.textContent = d[k];
+      });
+    }
+  });
+
+  // Load overall uptime
+  fetch('/api/uptime/overall')
+    .then(r => r.json())
+    .then(d => {
+      const el = document.getElementById('stat-uptime');
+      if (el) {
+        el.textContent = d.uptime_24h ? `${d.uptime_24h}%` : '—';
+      }
+    });
+
+  // Load recent incidents
+  fetch('/api/incidents/recent')
+    .then(r => r.json())
+    .then(d => {
+      const tbody = document.getElementById('recent-incidents-body');
+      if (!tbody) return;
+      if (!d.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">No recent incidents.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = d.map(inc => `
+        <tr>
+          <td class="fw-semibold">${inc.host_name}</td>
+          <td>${inc.service_type.toUpperCase()}</td>
+          <td class="text-muted" style="font-size:.8rem">${new Date(inc.started_at).toLocaleString()}</td>
+          <td class="text-muted" style="font-size:.8rem">${inc.is_ongoing ? '<span style="color:#f85149;font-weight:600">Ongoing</span>' : new Date(inc.resolved_at).toLocaleString()}</td>
+          <td class="text-muted" style="font-size:.8rem">${inc.duration_display}</td>
+        </tr>
+      `).join('');
+    });
+});
+</script>
+{% endblock %}
