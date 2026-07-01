@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Hosts — ServiceMonitor{% endblock %}
+{% block page_title %}Hosts{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h1 class="page-title mb-0">Monitored Hosts</h1>
+  <a href="/hosts/add" class="btn btn-primary-g">
+    <i class="bi bi-plus-lg me-1"></i>Add Host
+  </a>
+</div>
+
+{% if hosts %}
+<div class="g-card">
+  <div class="table-responsive">
+    <table class="table g-table mb-0">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>URL</th>
+          <th>OS / Location</th>
+          <th>HTTP</th>
+          <th>HTTPS</th>
+          <th>SSL</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for host in hosts %}
+
+        <tr>
+          <td>
+            <a href="/hosts/{{ host.id }}" class="fw-semibold" style="color:var(--text-1)">{{ host.name }}</a>
+            {% if host.canonical_name %}<div class="text-muted" style="font-size:.75rem">{{ host.canonical_name }}</div>{% endif %}
+          </td>
+          <td><span class="text-muted" style="font-size:.8rem;max-width:180px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ host.url }}</span></td>
+          <td><span class="text-muted" style="font-size:.8rem">{{ host.os or '' }}{% if host.os and host.location %} / {% endif %}{{ host.location or '' }}{% if not host.os and not host.location %}—{% endif %}</span></td>
+          {% for stype in ['http', 'https', 'ssl'] %}
+          <td>
+            {% for svc in host.services %}{% if svc.service_type == stype %}
+              {% if svc.is_active %}
+                <span class="status-badge badge-{{ svc.status }}">{{ svc.status }}</span>
+              {% else %}
+                <span class="text-muted" style="font-size:.75rem">Off</span>
+              {% endif %}
+          {% endif %}{% else %}
+              <span class="text-muted">—</span>
+          {% endfor %}
+          </td>
+          {% endfor %}
+          <td>
+            {% if host.is_active %}
+              <span class="status-badge badge-healthy">Active</span>
+            {% else %}
+              <span class="status-badge badge-pending">Inactive</span>
+            {% endif %}
+          </td>
+          <td>
+            <a href="/hosts/{{ host.id }}" class="btn btn-sm btn-outline-secondary btn-sm-g me-1" title="View"><i class="bi bi-eye"></i></a>
+            <a href="/hosts/{{ host.id }}/edit" class="btn btn-sm btn-outline-primary btn-sm-g me-1" title="Edit"><i class="bi bi-pencil"></i></a>
+            <button onclick="confirmDelete({{ host.id }}, '{{ host.name }}')" class="btn btn-sm btn-outline-danger btn-sm-g" title="Delete"><i class="bi bi-trash"></i></button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="g-card p-5 text-center">
+  <i class="bi bi-hdd-network" style="font-size:3rem;color:var(--text-3);display:block;margin-bottom:1rem"></i>
+  <p class="text-muted mb-3">No hosts added yet.</p>
+  <a href="/hosts/add" class="btn btn-primary-g">Add your first host</a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function confirmDelete(id, name) {
+  Swal.fire({
+    title: `Delete "${name}"?`,
+    text: 'All services and logs will be removed.',
+    icon: 'warning',
+    background: '#1c2128', color: '#e6edf3',
+    showCancelButton: true,
+    confirmButtonColor: '#f85149', cancelButtonColor: '#30363d',
+    confirmButtonText: 'Delete',
+  }).then(r => {
+    if (r.isConfirmed) {
+      const f = document.createElement('form');
+      f.method = 'POST'; f.action = `/hosts/${id}/delete`;
+      document.body.appendChild(f); f.submit();
+    }
+  });
+}
+</script>
+{% endblock %}

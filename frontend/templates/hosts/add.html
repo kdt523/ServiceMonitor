@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Add Host — ServiceMonitor{% endblock %}
+{% block page_title %}Add Host{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="d-flex align-items-center gap-2 mb-4">
+      <a href="/hosts" class="text-muted"><i class="bi bi-arrow-left"></i></a>
+      <h1 class="page-title mb-0">Add Host</h1>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger mb-3" style="background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:#f85149;border-radius:8px">
+      <i class="bi bi-exclamation-circle me-2"></i>{{ error }}
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/hosts/add">
+      <!-- Host Info -->
+      <div class="g-card mb-3">
+        <div class="g-card-header"><i class="bi bi-hdd-network me-2" style="color:var(--blue)"></i>Host Information</div>
+        <div class="p-4">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Display Name <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="form-control" placeholder="e.g. Production API" required />
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">URL <span class="text-danger">*</span></label>
+              <input type="text" name="url" class="form-control" placeholder="https://api.example.com" required />
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Canonical Name / FQDN</label>
+              <input type="text" name="canonical_name" class="form-control" placeholder="api.example.com" />
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">IPv4</label>
+              <input type="text" name="ipv4" class="form-control" placeholder="1.2.3.4" />
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">IPv6</label>
+              <input type="text" name="ipv6" class="form-control" placeholder="::1" />
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">OS / Platform</label>
+              <input type="text" name="os" class="form-control" placeholder="Ubuntu 22.04" />
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Location / Region</label>
+              <input type="text" name="location" class="form-control" placeholder="US-East" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Services -->
+      <div class="g-card mb-3">
+        <div class="g-card-header"><i class="bi bi-activity me-2" style="color:var(--green)"></i>Enable Services</div>
+        <div class="p-4">
+          <div class="row g-3 mb-3">
+            {% for stype, icon, desc in [
+              ('http', 'bi-globe', 'HTTP status check (requires 200–399)'),
+              ('https', 'bi-shield-lock', 'HTTPS check (enforces TLS handshake)'),
+              ('ssl', 'bi-patch-check', 'SSL certificate expiry tracking'),
+              ('tcp', 'bi-plug', 'Raw TCP port connectivity check'),
+              ('ping', 'bi-broadcast', 'ICMP ping (network reachability)'),
+              ('dns', 'bi-signpost-2', 'DNS hostname resolution'),
+              ('ssh', 'bi-terminal', 'SSH daemon check (port 22)'),
+              ('ftp', 'bi-folder2', 'FTP server check (port 21)'),
+              ('smtp', 'bi-envelope', 'SMTP banner grab (mail server)'),
+            ] %}
+            <div class="col-md-4">
+              <div class="p-3" style="background:var(--bg-surface);border:1px solid var(--border);border-radius:8px">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="enable_{{ stype }}" id="svc_{{ stype }}" value="1" />
+                  <label class="form-check-label" for="svc_{{ stype }}">
+                    <i class="bi {{ icon }} me-1" style="color:var(--blue)"></i>
+                    <strong>{{ stype.upper() }}</strong>
+                  </label>
+                </div>
+                <div class="text-muted mt-1" style="font-size:.78rem;padding-left:1.5rem">{{ desc }}</div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          <div class="row">
+            <div class="col-md-4">
+              <label class="form-label">Check Interval (minutes)</label>
+              <input type="number" name="interval_minutes" class="form-control" value="5" min="1" max="1440" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary-g"><i class="bi bi-check-lg me-1"></i>Add Host</button>
+        <a href="/hosts" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
