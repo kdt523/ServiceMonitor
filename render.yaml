@@ -3,8 +3,8 @@ services:
   - type: web
     name: servicemonitor-backend
     env: docker
-    # Build context = repo root; Dockerfile lives inside servicemonitor/backend/
-    dockerfilePath: servicemonitor/backend/Dockerfile
+    # Build context = repo root; Dockerfile lives inside backend/
+    dockerfilePath: backend/Dockerfile
     dockerContext: .
     plan: free          # change to 'starter' or higher for production
     region: oregon      # choose closest: oregon | frankfurt | singapore | ohio
